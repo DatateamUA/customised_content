@@ -1,0 +1,7 @@
+PyPDF2 
+openai==0.28.1 
+dotenv
+streamlit 
+google-generativeai
+#selenium
+plotly
