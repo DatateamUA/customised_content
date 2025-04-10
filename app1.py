@@ -121,10 +121,13 @@ def generate_custom_course(content, user_summary, api_key, llm_model):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(llm_model)
 
-    prompt = f"""Customize this course content for the following user profile:
+    prompt = f"""Customize the following course content to align with the individual's specific needs, challenges, and professional goals. Ensure that the material is highly relevant, practical, and engaging for their role.
+At the beginning, include a concise summary that highlights the key takeaways and benefits tailored for the individual based on the provided context.
+
+User Information:
 {user_summary}
 
-Content:
+Course Content:
 {content}"""
 
     try:
@@ -169,7 +172,7 @@ with col1:
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
-    llm_model = st.selectbox('Gemini Model', ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest'])
+    llm_model = st.selectbox('Gemini Model', [ 'gemini-1.5-flash-latest','gemini-1.5-pro-latest'])
     api_key = st.text_input('🔐 Gemini API Key', type="password")
     st.markdown("---")
     st.markdown("🧑💻 User Profile")
