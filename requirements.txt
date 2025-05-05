@@ -2,6 +2,11 @@ PyPDF2
 openai==0.28.1 
 dotenv
 streamlit 
-google-generativeai
+#google-generativeai
 #selenium
-plotly
+#plotly
+#opennlp
+networkx
+ipykernel
+spacy
+matplotlib
