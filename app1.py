@@ -121,10 +121,12 @@ def generate_custom_course(content, user_summary, api_key, llm_model):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(llm_model)
 
-    prompt = f"""Create a personalized, module-wise course based on the following content and user qualification.
+    prompt = f"""You are an expert course designer and instructional strategist.
+Create a personalized, module-wise course based on the following content and user qualification.
 
 User Qualification: {user_summary}
 Course Content: {content}
+Analyze the content and structure it into a course format that is engaging for both students and professionals.
 Break the course into clearly defined modules suitable for the user's level of understanding, ensuring each concept builds logically on the previous one.
 For each module, include:
 A title
@@ -133,8 +135,9 @@ Examples that relate to their field or experience level
 Concept explanations simplified to match the user’s understanding
 Optional: Add real-world applications or case studies to make it more practical
 Ensure the course is beginner-friendly, practical, and engaging for someone with the given qualification.
+This is just a sample structure — feel free to adapt or extend it as needed, while ensuring the tone remains beginner-friendly, practical, and engaging.
 Present the output in structured format (e.g., Markdown or bullets).
-"""
+Format everything in clean Markdown using headers, bold text, bullet points, and code blocks (if necessary) """
 
     try:
         response = model.generate_content(prompt)
