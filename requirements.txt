@@ -10,3 +10,4 @@ networkx
 ipykernel
 spacy
 matplotlib
+ollama
