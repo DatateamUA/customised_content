@@ -1,229 +1,98 @@
 import streamlit as st
 import PyPDF2
-import google.generativeai as genai
-import json
 import re
+import ollama
 
+
+#modelname='mistral'
 # --- Read PDF ---
 def read_pdf(file):
     pdf_reader = PyPDF2.PdfReader(file)
     text = "\n".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
     return text
 
-# --- Extract JSON from Gemini Output ---
-def extract_json_from_response(response_text):
-    try:
-        json_match = re.search(r'\{[\s\S]*\}', response_text)
-        if json_match:
-            parsed = json.loads(json_match.group())
-            if "nodes" in parsed and "edges" in parsed:
-                return parsed
-    except json.JSONDecodeError as e:
-        st.error(f"⚠️ JSON decode error: {e}")
-    raise ValueError("Gemini returned no valid JSON.")
-
-# --- Generate Mind Map JSON ---
-def generate_mindmap_data(content, api_key, model_name):
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-
-    prompt = f"""Convert the following course module into a JSON-based mind map.
-Return ONLY valid JSON with two keys:
-- "nodes": List of objects like {{"id": "unique_id", "label": "Node Label", "group": "Module/Subtopic"}}
-- "edges": List of objects like {{"from": "parent_id", "to": "child_id", "label": "relationship"}}
-
-Ensure:
-- IDs are unique
-- Use short, clear labels
-- Connect related concepts logically
-
-Content: {content[:2800]}"""
-
-    try:
-        response = model.generate_content(prompt)
-        return extract_json_from_response(response.text)
-    except Exception as e:
-        st.error(f"❌ Mindmap generation failed: {str(e)}")
-        return None
-
-# --- Visualize Mind Map ---
-def visualize_mindmap(data, title="🧠 Module Mind Map"):
-    if not data or "nodes" not in data or "edges" not in data:
-        st.warning("⚠️ Invalid mindmap data.")
-        return
-
-    nodes = [{"id": n["id"], "label": n["label"], "group": n.get("group", "default")} for n in data["nodes"]]
-    edges = [{"from": e["from"], "to": e["to"], "label": e.get("label", "")} for e in data["edges"]]
-
-    st.caption(f"🧩 Total Nodes: {len(nodes)} | 🔗 Total Edges: {len(edges)}")
-
-    html = f"""
-    <html>
-    <head>
-      <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-      <style>
-        #mynetwork {{
-          width: 100%;
-          height: 600px;
-          border: 2px solid #ddd;
-          background: #f7f9fc;
-          border-radius: 8px;
-        }}
-      </style>
-    </head>
-    <body>
-      <div id="mynetwork"></div>
-      <script>
-        var nodes = new vis.DataSet({json.dumps(nodes)});
-        var edges = new vis.DataSet({json.dumps(edges)});
-        var options = {{
-          nodes: {{
-            shape: "box",
-            font: {{ size: 14, face: 'monospace' }},
-            margin: 10,
-            color: {{
-              background: "#e3f2fd",
-              border: "#90caf9",
-              highlight: {{
-                background: "#bbdefb",
-                border: "#1976d2"
-              }}
-            }},
-            shadow: true
-          }},
-          edges: {{
-            arrows: "to",
-            smooth: {{ type: "cubicBezier", forceDirection: "vertical", roundness: 0.4 }},
-            font: {{ size: 12, color: "#333" }},
-            color: {{ color: "#90a4ae", highlight: "#1976d2" }}
-          }},
-          layout: {{
-            hierarchical: {{
-              enabled: true,
-              direction: "UD",
-              levelSeparation: 140,
-              nodeSpacing: 150,
-              treeSpacing: 200
-            }}
-          }},
-          physics: false
-        }};
-        new vis.Network(document.getElementById("mynetwork"), {{ nodes: nodes, edges: edges }}, options);
-      </script>
-    </body>
-    </html>
-    """
-    st.subheader(title)
-    st.components.v1.html(html, height=630)
-
-# --- Generate Customized Course ---
-def generate_custom_course(content, user_summary, api_key, llm_model):
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(llm_model)
-
-    prompt = f"""You are an expert course designer and instructional strategist.
-Create a personalized, module-wise course based on the following content and user qualification.
+# --- Generate Customized Course using local LLaMA (Ollama) ---
+def generate_custom_course(content, user_summary,modelname):
+    prompt = f"""You are an expert course summariser and instructional strategist.
+Create a personalized summary on the following course content and user qualification.
 
 User Qualification: {user_summary}
 Course Content: {content}
-Analyze the content and structure it into a course format that is engaging for both students and professionals.
-Break the course into clearly defined modules suitable for the user's level of understanding, ensuring each concept builds logically on the previous one.
-For each module, include:
-A title
-A short summary tailored to the user’s background
-Examples that relate to their field or experience level
-Concept explanations simplified to match the user’s understanding
-Optional: Add real-world applications or case studies to make it more practical
+
+Analyze the Course content and structure it into a summarized format that is engaging for both students and professionals.
+
+Include:
+- A title
+- A short summary tailored to the user’s background
+- Examples that relate to their field or experience level
+- Concept explanations simplified to match the user’s understanding
+- Optional: Add real-world applications or case studies to make it more practical
+
 Ensure the course is beginner-friendly, practical, and engaging for someone with the given qualification.
-This is just a sample structure — feel free to adapt or extend it as needed, while ensuring the tone remains beginner-friendly, practical, and engaging.
-Present the output in structured format (e.g., Markdown or bullets).
-Format everything in clean Markdown using headers, bold text, bullet points, and code blocks (if necessary) """
+This is just a sample structure — feel free to adapt or extend it as needed.
+Format everything in clean Markdown using headers, bold text, bullet points, and code blocks if needed.
+and 
+Summarize the course content in a concise manner, listing the main topics and learning outcomes as summary"""
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        st.error(f"❌ Course generation failed: {str(e)}")
-        return ""
+    response = ollama.chat(
+        model=modelname,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response['message']['content']
 
-# --- Split Course into Modules ---
+# --- Generate Summary using local LLaMA (Ollama) ---
+def generate_summary(text,modelname):
+    prompt = f"""Summarize the following course content in a concise manner, listing the main topics and learning outcomes:
+
+{text[:5000]}"""
+
+    response = ollama.chat(
+        model=modelname,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response['message']['content']
+
+# --- Optional: Split Course into Modules ---
 def split_into_modules(course_text):
     pattern = r"(Module\s*\d+[:\-]?\s+.*?)(?=(?:Module\s*\d+[:\-]?\s+)|$)"
     matches = re.findall(pattern, course_text, re.IGNORECASE | re.DOTALL)
     return matches if matches else [course_text]
 
-# --- Generate Summary ---
-def generate_summary(text, api_key, model_name):
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-
-    prompt = f"""Summarize the following course content in a concise manner, listing the main topics and learning outcomes:
-
-{text[:5000]}"""
-
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        st.error(f"❌ Summary generation failed: {str(e)}")
-        return ""
-
 # --- Streamlit UI ---
-st.set_page_config(page_title="AI Course Generator", layout="wide")
+st.set_page_config(page_title="Personalised Summary of Course", layout="wide")
 
-st.title("📘 AI-Powered Custom Course Generator")
-st.markdown("Upload a course PDF and customize it for a user profile. Visualize each module as a mind map and get a final summary.")
+st.title("📘 Personalised Summary of Course")
+st.markdown("Upload a course PDF and customize it for a user profile. Get a structured course output and final summary.")
 
 col1, col2 = st.columns(2)
 with col1:
     uploaded_file = st.file_uploader("📂 Upload Course PDF", type=["pdf"])
 
-# Sidebar
+# Sidebar for user profile
 with st.sidebar:
-    st.header("⚙️ Settings")
-    llm_model = st.selectbox('Gemini Model', [ 'gemini-1.5-flash-latest','gemini-1.5-pro-latest'])
-    api_key = st.text_input('🔐 Gemini API Key', type="password")
-    st.markdown("---")
-    st.markdown("🧑💻 User Profile")
-    user_summary = st.text_area("User Summary", height=150, value="John Doe, 4 years management experience, plant head level")
+    st.header("Models")
+    modelname = st.selectbox('Open - Sourced Model', [ 'llama3.1','gemma:7b','mistral','gemma'])
+    st.header("🧑💻 User Profile")
+    user_summary = st.text_area("User Summary", height=150, value="Based in India, Pratik holds a Master's degree or above qualification and has over 4 years of experience in the Data Science industry. Currently working at a Senior data scientist level.")
 
 # Main process
 if st.button("🚀 Generate Course"):
-    if not api_key:
-        st.warning("Please enter your Gemini API Key.")
-        st.stop()
-
-    if uploaded_file:
-        pdf_content = read_pdf(uploaded_file)
-    else:
+    if not uploaded_file:
         st.warning("Please upload a PDF.")
         st.stop()
 
+    pdf_content = read_pdf(uploaded_file)
+
     with st.spinner("🔍 Customizing course..."):
-        custom_course = generate_custom_course(pdf_content, user_summary, api_key, llm_model)
+        custom_course = generate_custom_course(pdf_content, user_summary,modelname)
 
     if custom_course:
         st.subheader("📚 Customized Course Content")
         st.markdown(custom_course)
         st.download_button("⬇️ Download Full Course", custom_course, file_name="custom_course.md")
 
-        modules = split_into_modules(custom_course)
-        st.markdown("---")
-        st.header("🧩 Module-wise Mind Maps")
-
-        for idx, module in enumerate(modules, start=1):
-            with st.spinner(f"🔧 Generating Mind Map for Module {idx}..."):
-                mindmap_data = generate_mindmap_data(module, api_key, llm_model)
-                visualize_mindmap(mindmap_data, title=f"🧠 Mind Map - Module {idx}")
-                if mindmap_data:
-                    st.download_button(
-                        f"⬇️ Download Mind Map {idx} JSON",
-                        json.dumps(mindmap_data, indent=2),
-                        file_name=f"mindmap_module_{idx}.json"
-                    )
-
-        st.markdown("---")
-        st.header("📌 Course Summary")
-        with st.spinner("🧾 Generating summary..."):
-            summary = generate_summary(custom_course, api_key, llm_model)
-            st.markdown(summary)
+        #st.markdown("---")
+        #st.header("📌 Course Summary")
+        #'''with st.spinner("🧾 Generating summary..."):
+        #    summary = generate_summary(custom_course,modelname)
+        #    st.markdown(summary)'''
